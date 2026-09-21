@@ -1,0 +1,58 @@
+﻿tes_1;2023-06-09;Tesla, Inc.;TSLA;USD;Buy;0,0282;247,39;0,07;t
+blo_1;2023-06-13;Block, Inc.;SQ;USD;Buy;0,2283;65,7;0,15;t
+tes_1;2023-06-13;Tesla, Inc.;TSLA;USD;Buy;0,0632;258,71;0,16;t
+pal_1;2023-06-16;Palantir Technologies Inc.;PLTR;USD;Buy;0,625;16,2267;0,1;t
+tes_1;2023-06-29;Tesla, Inc.;TSLA;USD;Buy;0,1635;258,12;0,42;t
+ado_1;2023-07-05;Adobe Inc.;ADBE;USD;Buy;0,0824;483,25;0,4;s
+blo_1;2023-07-06;Block, Inc.;SQ;USD;Buy;0,179;63,95;0,11;t
+tes_1;2023-07-14;Tesla, Inc.;TSLA;USD;Buy;0,3876;281,21;1;t
+pal_1;2023-07-25;Palantir Technologies Inc.;PLTR;USD;Sell;0,625;16,4;0,1;t
+blo_1;2023-07-25;Block, Inc.;SQ;USD;Sell;0,4073;77,99;0,32;t
+tes_1;2023-08-14;Tesla, Inc.;TSLA;USD;Buy;0,1681;237,85;0,4;t
+equ_1;2023-08-22;Equasens SA;EQS.PA;EUR;Buy;1;74;0,37;s
+app_1;2023-09-13;Apple Inc;AAPL;USD;Buy;1;175,8;1;s
+vin_1;2023-10-02;VINCI SA;DG.PA;EUR;Buy;1;105,28;0,53;r
+int_1;2023-11-06;Interparfums;ITP.PA;EUR;Buy;2;45,3;0,45;s
+vin_1;2023-11-16;VINCI SA;DG.PA;EUR;Dividend;1,05;;;r
+app_1;2023-11-16;Apple Inc;AAPL;USD;Dividend;0,2;;;s
+int_1;2023-12-06;Interparfums;ITP.PA;EUR;Buy;4;49,6;0,3;s
+tes_1;2023-12-06;Tesla, Inc.;TSLA;USD;Buy;0,168;243;0,41;t
+equ_1;2023-12-06;Equasens SA;EQS.PA;EUR;Sell;1;60,6;0,99;s
+app_1;2024-02-15;Apple Inc;AAPL;USD;Dividend;0,2;;;s
+app_1;2024-05-16;Apple Inc;AAPL;USD;Dividend;0,21;;;s
+vin_1;2024-04-25;VINCI SA;DG.PA;EUR;Dividend;3,45;;;r
+int_1;2024-04-30;Interparfums;ITP.PA;EUR;Dividend;6,9;;;s
+int_1;2024-07-25;Interparfums;ITP.PA;EUR;Bonus issue;27,5;;;s
+app_1;2024-08-15;Apple Inc;AAPL;USD;Dividend;0,21;;;s
+vin_1;2024-10-17;VINCI SA;DG.PA;EUR;Dividend;1,05;;;r
+ado_1;2024-10-31;Adobe Inc.;ADBE;USD;Sell;0,0824;478,93;0,4;s
+tes_1;2024-10-31;Tesla, Inc.;TSLA;USD;Sell;0,9786;250,17;1,01;t
+wis_1;2024-11-01;WisdomTree NASDAQ 100 3x Daily Leveraged;QQQ3.L;USD;Buy;1;212,36;4;t
+app_1;2024-11-01;Apple Inc;AAPL;USD;Buy;0,2667;225,14;0,6;s
+app_1;2024-11-14;Apple Inc;AAPL;USD;Dividend;0,27;;;s
+int_1;2024-12-02;Interparfums;ITP.PA;EUR;Sell;6;39,5;1,16;s
+vin_1;2024-12-02;VINCI SA;DG.PA;EUR;Sell;1;97,96;0,49;r
+rob_1;2024-12-03;Robertet SA;RBT.PA;EUR;Buy;1;872;4,29;t
+app_1;2025-02-13;Apple Inc;AAPL;USD;Dividend;0,32;;;s
+das_1;2025-03-13;Dassault Aviation SA;AM.PA;EUR;Buy;3;294;4,33;r
+rob_1;2025-03-25;Robertet SA;RBT.PA;EUR;Sell;1;800;3,94;t
+the_1;2025-03-26;Theon International Plc;THEON.XAMS;EUR;Buy;2;23,6;0,24;r
+gaz_1;2025-03-26;Gaztransport & Technigaz SA;GTT.PA;EUR;Buy;5;146,9;3,58;r
+app_1;2025-04-04;Apple Inc;AAPL;USD;Buy;1;193,3;1;s
+nvi_1;2025-04-04;NVIDIA Corporation;NVDA;USD;Buy;1;98,62;0,99;s
+nvi_1;2025-04-07;NVIDIA Corporation;NVDA;USD;Sell;1;97,64;1;s
+app_1;2025-04-08;Apple Inc;AAPL;USD;Sell;2,2667;184,6;1,01;s
+nvi_2;2025-04-16;NVIDIA Corporation;NVDA;USD;Buy;10;103,5;1;s
+red_1;2025-04-16;Reddit, Inc.;RDDT;USD;Buy;3,1917;93,99219194;1;t
+nvi_2;2025-04-21;NVIDIA Corporation;NVDA;USD;Buy;5;96,3;1;s
+lyf_1;2025-04-21;Lyft, Inc.;LYFT;USD;Buy;13;10,88;1;t
+wis_1;2025-05-02;WisdomTree NASDAQ 100 3x Daily Leveraged;QQQ3.L;USD;Buy;1;171,72;4;t
+nvi_2;2025-05-02;NVIDIA Corporation;NVDA;USD;Buy;5;114;1;s
+red_1;2025-05-02;Reddit, Inc.;RDDT;USD;Buy;1,8083;118,1401095;1;t
+lyf_1;2025-05-02;Lyft, Inc.;LYFT;USD;Buy;12;12,65;1;t
+wis_1;2025-05-02;WisdomTree NASDAQ 100 3x Daily Leveraged;QQQ3.L;USD;Buy;1;175,46;4;t
+red_1;2025-05-05;Reddit, Inc.;RDDT;USD;Buy;1;111,98;1;t
+das_1;2025-05-22;Dassault Aviation SA;AM.PA;EUR;Dividend;14,16;;;r
+gaz_1;2025-06-19;Gaztransport & Technigaz SA;GTT.PA;EUR;Dividend;19,15;;;r
+the_1;2025-06-27;Theon International Plc;THEON.XAMS;EUR;Dividend;0,68;;;r
+asm_1;2025-06-30;ASML Holding NV;ASML.XAMS;EUR;Buy;2;679,4;6,67;t

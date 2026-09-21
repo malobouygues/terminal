@@ -1,0 +1,10 @@
+# Ignorer IB Gateway
+IB Gateway*/
+*.zip
+
+# Ignorer le cache Python et SQLite
+__pycache__/
+*/__pycache__/
+*/*/__pycache__/
+*.pyc
+__datacache__/

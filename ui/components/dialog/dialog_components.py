@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit, QComboBox, QDateEdit, QDateTimeEdit, QSizePolicy
 from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionViewItem
-from PySide6.QtCore import QSize, QModelIndex, Qt, QDate
+from PySide6.QtCore import QSize, Qt, QDate
 from PySide6.QtGui import QFocusEvent
 
 
@@ -15,8 +15,6 @@ class DateEditNoAutoSelect(QDateEdit):
 from ...styles import (
     get_field_label_style, get_white_field_label_style, get_white_label_style,
     get_line_edit_style, get_accent_line_edit_style, get_combo_box_style,
-    get_prop_font_name,
-    COLOR_GRAY_LIGHT, COLOR_GRAY_DARK, COLOR_TEXT_ACCENT, COLOR_BLACK, FONT_SIZE_LARGE,
 )
 from .dialog_constants import SECTION_MARGIN_LEFT, SECTION_SPACING
 
@@ -61,29 +59,6 @@ def apply_combo_line_edit_style(combo, style_sheet=None) -> None:
         # combo rendering. Force them to 0 so the first glyph aligns consistently.
         line_edit.setTextMargins(0, 0, 0, 0)
 
-def create_combo_medium(items):
-    combo = QComboBox()
-    combo.addItems(items)
-    combo.setItemDelegate(NoCheckmarkItemDelegate())
-    view = combo.view()
-    if view:
-        view.setItemDelegate(NoCheckmarkItemDelegate())
-    combo.setFixedSize(180, 20)
-    style = get_combo_box_style() + """
-        QComboBox {
-            margin: 0px;
-            padding-left: 2px !important;
-            padding-right: 2px;
-            padding-top: 0px;
-            padding-bottom: 0px;
-            text-align: left;
-        }
-    """
-    combo.setStyleSheet(style)
-    combo.setContentsMargins(0, 0, 0, 0)
-    combo.setEditable(False)
-    return combo
-
 def create_combo_large(items, editable=False):
     from .dialog_constants import INPUT_WIDTH_LARGE
     combo = create_combo_small(items, editable)
@@ -123,35 +98,6 @@ def create_date_input_large():
     date_edit.setStyleSheet(date_style)
     return date_edit
 
-def create_lot_input():
-    from .dialog_constants import INPUT_WIDTH_SMALL
-    COLOR_ORANGE_READONLY = "#B86F1A"
-    font_css = f"'{get_prop_font_name()}'"
-    edit = QLineEdit()
-    edit.setFixedSize(INPUT_WIDTH_SMALL, 20)
-    edit.setReadOnly(True)
-    edit.setPlaceholderText("lot n°xx")
-    style = f"""
-        QLineEdit {{
-            background-color: {COLOR_ORANGE_READONLY};
-            color: {COLOR_BLACK};
-            border: none;
-            border-top: none;
-            border-bottom: none;
-            border-left: none;
-            border-right: none;
-            padding: 0px 2px;
-            margin: 0px;
-            font-family: {font_css};
-            font-size: {FONT_SIZE_LARGE}pt;
-            font-style: italic;
-        }}
-    """
-    edit.setStyleSheet(style)
-    edit.setContentsMargins(0, 0, 0, 0)
-    edit.setTextMargins(0, 0, 0, 0)
-    return edit
-
 def create_input_large():
     from .dialog_constants import INPUT_WIDTH_LARGE
     edit = QLineEdit()
@@ -178,23 +124,6 @@ def create_value_label_small(value="XX,XXX.XX", align_left=False):
     from .dialog_constants import VALUE_WIDTH_SMALL
     container = QWidget()
     container.setFixedWidth(VALUE_WIDTH_SMALL)
-    layout = QHBoxLayout(container)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(0)
-    if not align_left:
-        layout.addStretch()
-    label = QLabel(value)
-    alignment = Qt.AlignLeft | Qt.AlignVCenter if align_left else Qt.AlignRight | Qt.AlignVCenter
-    label.setAlignment(alignment)
-    label.setStyleSheet(get_white_field_label_style())
-    layout.addWidget(label, stretch=0)
-    container.label = label
-    return container
-
-def create_value_label_medium(value="XX,XXX.XX", align_left=False):
-    from .dialog_constants import VALUE_WIDTH_MEDIUM
-    container = QWidget()
-    container.setFixedWidth(VALUE_WIDTH_MEDIUM)
     layout = QHBoxLayout(container)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(0)

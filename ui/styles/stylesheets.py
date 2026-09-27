@@ -6,7 +6,7 @@ from .colors import (
     COLOR_BORDEAUX, COLOR_BORDER_LIGHT, COLOR_BORDER_MEDIUM, COLOR_BORDER_HOVER,
     COLOR_FUNCTION_BAR_BG,
     COLOR_BUTTON_BG, COLOR_BUTTON_HOVER,
-    COLOR_CMD_BG, COLOR_LINE_EDIT_BG,
+    COLOR_LINE_EDIT_BG,
 )
 from .dimensions import (
     FONT_SIZE_SMALL, FONT_SIZE_LARGE, FONT_SIZE_MEDIUM, FONT_SIZE_XLARGE,
@@ -44,10 +44,6 @@ QHeaderView::section {{ background-color: {COLOR_TABLE_HEADER_BG}; color: {COLOR
 
 def get_label_style(color=COLOR_TEXT_ACCENT, font_size=17, font_weight="normal", padding="0px", margin="0px") -> str:
     return f"color: {color}; font-size: {font_size}pt; font-weight: {font_weight}; font-family: {_font_css()}; padding: {padding}; margin: {margin};"
-
-
-def get_accent_label_style(font_size=17) -> str:
-    return get_label_style(COLOR_TEXT_ACCENT, font_size)
 
 
 def get_white_label_style(font_size=17) -> str:
@@ -116,24 +112,8 @@ def get_title_bar_style() -> str:
     return f"background-color: {COLOR_BORDER_LIGHT};"
 
 
-def get_radio_button_style() -> str:
-    return f"QRadioButton {{ color: {COLOR_WHITE}; font-family: {_font_css()}; font-size: {FONT_SIZE_LARGE}pt; }} QRadioButton::indicator {{ width: 15px; height: 15px; }} QRadioButton::indicator::unchecked {{ background-color: {COLOR_GRAY_DARK}; border: 2px solid {COLOR_GRAY_LIGHT}; border-radius: 7px; }} QRadioButton::indicator::checked {{ background-color: {COLOR_TEXT_ACCENT}; border: 2px solid {COLOR_TEXT_ACCENT}; border-radius: 7px; }}"
-
-
-def get_text_area_style() -> str:
-    return f"QTextEdit {{ background-color: {COLOR_CMD_BG}; color: {COLOR_WHITE}; border: 1px solid {COLOR_BORDER_LIGHT}; padding: 5px; font-family: {_font_css()}; font-size: {FONT_SIZE_LARGE}pt; }}"
-
-
 def get_accent_line_edit_style() -> str:
     return f"QLineEdit {{ background-color: {COLOR_TEXT_ACCENT}; color: {COLOR_BLACK}; border: none; padding: 0px 2px; font-family: {_font_css()}; font-size: {FONT_SIZE_LARGE}pt; }}"
-
-
-def get_loading_screen_style() -> str:
-    return f"background-color: {COLOR_BACKGROUND};"
-
-
-def get_loading_label_style() -> str:
-    return f"color: {COLOR_TEXT_NORMAL}; font-size: {FONT_SIZE_LARGE}pt;"
 
 
 def get_field_label_style(color=COLOR_TEXT_ACCENT, font_size=FONT_SIZE_LARGE) -> str:

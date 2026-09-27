@@ -8,3 +8,6 @@ __pycache__/
 */*/__pycache__/
 *.pyc
 __datacache__/
+
+# Fichiers système macOS
+.DS_Store

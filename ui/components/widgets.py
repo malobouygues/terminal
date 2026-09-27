@@ -2,16 +2,16 @@ from typing import Callable
 
 from PySide6.QtWidgets import (
     QHeaderView, QTableView, QStyledItemDelegate, QPushButton, QWidget,
-    QLabel, QApplication, QSizePolicy, QVBoxLayout
+    QLabel, QSizePolicy
 )
-from PySide6.QtCore import Qt, QEvent, Signal, QModelIndex, QAbstractItemModel
-from PySide6.QtGui import QPainter, QPen, QColor, QBrush, QCursor, QMouseEvent, QFont
+from PySide6.QtCore import Qt, Signal, QAbstractItemModel
+from PySide6.QtGui import QPainter, QPen, QColor, QBrush, QCursor, QFont
 from ..styles import (
     COLOR_BLACK, COLOR_TABLE_BORDER, WIDGET_HEIGHT_HEADER, TABLE_BORDER_WIDTH,
     COLOR_TABLE_TEXT, get_prop_font_name, COLOR_TAB_ACTIVE_BG, COLOR_TAB_INACTIVE_BG,
     COLOR_TAB_ACTIVE_TEXT, COLOR_TAB_INACTIVE_TEXT, COLOR_GRAY_LIGHT, COLOR_GRAY_DARK,
     COLOR_BUTTON_HOVER, COLOR_GRAY_HOVER, FONT_SIZE_MEDIUM, SPACING_LARGE, WIDGET_HEIGHT_TAB,
-    COLOR_TEXT_NORMAL, COLOR_TEXT_ACCENT, FONT_SIZE_NORMAL, COLOR_BACKGROUND, FONT_SIZE_LARGE,
+    COLOR_TEXT_NORMAL, COLOR_TEXT_ACCENT, FONT_SIZE_NORMAL,
     get_table_stylesheet, TABLE_ROW_HEIGHT, WIDGET_HEIGHT_SEPARATOR
 )
 
@@ -271,26 +271,6 @@ class ClickableLabel(QLabel):
             self.clicked.emit()
 
 
-class LoadingScreen(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground, False)
-        self.setStyleSheet(f"background-color: {COLOR_BACKGROUND};")
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignCenter)
-        self.label = QLabel("Chargement...")
-        self.label.setAlignment(Qt.AlignCenter)
-        self.label.setStyleSheet(f"color: {COLOR_TEXT_NORMAL}; font-size: {FONT_SIZE_LARGE}pt;")
-        layout.addWidget(self.label)
-        self.setFixedSize(300, 100)
-        screen = QApplication.primaryScreen().geometry()
-        self.move((screen.width() - 300) // 2, (screen.height() - 100) // 2)
-    
-    def set_message(self, message):
-        self.label.setText(message)
-
-
 def create_separator_line(height=WIDGET_HEIGHT_SEPARATOR):
     from ..styles import get_separator_line_style
     line = QWidget()
@@ -304,4 +284,3 @@ def create_bottom_bar():
     bar.setFixedHeight(WIDGET_HEIGHT_BUTTON)
     bar.setStyleSheet(get_bottom_bar_style())
     return bar
-

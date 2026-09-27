@@ -63,6 +63,9 @@ def init_ledger_db() -> None:
         if legacy:
             _migrate_legacy(conn, schema)
         conn.executescript(schema)
+        _migrate_instruments(conn, schema)
+        if conn.execute("SELECT 1 FROM pragma_table_info('journal_lines') WHERE name = 'created_at'").fetchone():
+            conn.execute("ALTER TABLE journal_lines DROP COLUMN created_at")
         if conn.execute("SELECT 1 FROM lots WHERE id LIKE 'lot_%'").fetchone():
             _rename_numeric_lots(conn)
         if conn.execute("SELECT 1 FROM lots WHERE id != lower(id)").fetchone():
@@ -70,7 +73,7 @@ def init_ledger_db() -> None:
 
 
 def _migrate_legacy(conn: sqlite3.Connection, schema: str) -> None:
-    """Ancien schéma → nouveau : lots sans stratégie, ids 'lot_00X', amount unique, created_at."""
+    """Ancien schéma → nouveau : lots sans stratégie, ids 'lot_00X', amount unique."""
     conn.execute("PRAGMA foreign_keys = OFF")
     conn.executescript("""
         ALTER TABLE accounts        RENAME TO accounts_old;
@@ -83,25 +86,55 @@ def _migrate_legacy(conn: sqlite3.Connection, schema: str) -> None:
     """)
     conn.executescript(schema)
     conn.executescript("""
-        INSERT INTO instruments (conid, name, type, currency, expiry, strike, "right", multiplier)
-            SELECT conid, name, type, currency, expiry, strike, "right", multiplier FROM instruments_old;
+        INSERT INTO instruments (conid, name, des, type, currency, expiry, strike, "right", multiplier)
+            SELECT conid, name,
+                   CASE type WHEN 'DELTA_ONE' THEN 'Ordinary Shares' ELSE '' END,
+                   CASE type WHEN 'DELTA_ONE' THEN 'SECURITY' ELSE 'DERIVATIVE' END,
+                   currency, expiry, strike, "right", multiplier
+            FROM instruments_old;
         INSERT INTO lots (id, date_open, date_close)
             SELECT 'lot_' || substr('000' || id, -3), date_open, date_close FROM lots_old;
         INSERT INTO lot_instruments (lot_id, instrument_conid)
             SELECT 'lot_' || substr('000' || lot_id, -3), instrument_conid FROM lot_instruments_old;
         INSERT INTO journal_lines (id, entry_id, account_id, instrument_conid, lot_id,
-                                   quantity, cost_basis, currency, amount, line_type, created_at)
-            SELECT jl.id, jl.entry_id, jl.account_id, jl.instrument_conid,
-                   CASE WHEN jl.lot_id IS NULL THEN NULL ELSE 'lot_' || substr('000' || jl.lot_id, -3) END,
-                   jl.quantity, jl.cost_basis, jl.currency, jl.amount_txn, jl.line_type,
-                   je.date || ' 00:00:00'
-            FROM journal_lines_old jl JOIN journal_entries je ON je.id = jl.entry_id;
+                                   quantity, cost_basis, currency, amount, line_type)
+            SELECT id, entry_id, account_id, instrument_conid,
+                   CASE WHEN lot_id IS NULL THEN NULL ELSE 'lot_' || substr('000' || lot_id, -3) END,
+                   quantity, cost_basis, currency, amount_txn, line_type
+            FROM journal_lines_old;
         DROP TABLE journal_lines_old;
         DROP TABLE lot_instruments_old;
         DROP TABLE lots_old;
         DROP TABLE instruments_old;
         DROP TABLE accounts_old;
     """)
+    conn.execute("PRAGMA foreign_keys = ON")
+
+
+def _migrate_instruments(conn: sqlite3.Connection, schema: str) -> None:
+    """Recrée `instruments` quand son schéma a changé (CHECK de type, colonne `des`) :
+    'DELTA_ONE' → 'SECURITY', 'DERIVATIVES' → 'DERIVATIVE', des par défaut 'Ordinary Shares'."""
+    row = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'instruments'").fetchone()
+    has_des = conn.execute("SELECT 1 FROM pragma_table_info('instruments') WHERE name = 'des'").fetchone()
+    if row is None or (has_des and "DELTA_ONE" not in row["sql"]):
+        return
+    des = "des" if has_des else "CASE WHEN type LIKE 'DERIVATIVE%' THEN '' ELSE 'Ordinary Shares' END"
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("PRAGMA legacy_alter_table = ON")     # ne pas réécrire les FK des autres tables
+    conn.execute("ALTER TABLE instruments RENAME TO instruments_old")
+    conn.executescript(schema)
+    conn.execute(
+        f"""
+        INSERT INTO instruments (conid, name, des, symbol, type, currency, expiry, strike, "right", multiplier)
+        SELECT conid, name, {des}, symbol,
+               CASE type WHEN 'DELTA_ONE' THEN 'SECURITY' WHEN 'DERIVATIVES' THEN 'DERIVATIVE' ELSE type END,
+               currency, expiry, strike, "right", multiplier
+        FROM instruments_old
+        """
+    )
+    conn.execute("DROP TABLE instruments_old")
+    conn.commit()
+    conn.execute("PRAGMA legacy_alter_table = OFF")
     conn.execute("PRAGMA foreign_keys = ON")
 
 
@@ -168,7 +201,7 @@ def get_instrument(conid: str) -> dict | None:
 
 
 def upsert_instrument(
-    conid: str, name: str, type: str, currency: str,
+    conid: str, name: str, des: str, type: str, currency: str,
     expiry: str | None = None, strike: float | None = None,
     right: str | None = None, multiplier: float = 1.0, symbol: str | None = None,
 ) -> None:
@@ -176,14 +209,15 @@ def upsert_instrument(
         validate_currency(conn, currency)
         conn.execute(
             """
-            INSERT INTO instruments (conid, name, symbol, type, currency, expiry, strike, "right", multiplier)
-            VALUES (?,?,?,?,?,?,?,?,?)
+            INSERT INTO instruments (conid, name, des, symbol, type, currency, expiry, strike, "right", multiplier)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(conid) DO UPDATE SET
-                name=excluded.name, symbol=COALESCE(excluded.symbol, instruments.symbol),
+                name=excluded.name, des=excluded.des,
+                symbol=COALESCE(excluded.symbol, instruments.symbol),
                 currency=excluded.currency, expiry=excluded.expiry, strike=excluded.strike,
                 "right"=excluded."right", multiplier=excluded.multiplier
             """,
-            (conid, name, symbol, type, currency, expiry, strike, right, multiplier),
+            (conid, name, des, symbol, type, currency, expiry, strike, right, multiplier),
         )
         conn.commit()
 

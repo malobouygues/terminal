@@ -3,10 +3,11 @@ from dataclasses import dataclass, field
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtGui import QColor
 
-from ..components.widgets import TableBorderDelegate
 from ..styles import COLOR_TEXT_ACCENT, COLOR_WHITE
 
 EDITABLE_TYPES = ("DEPOSIT", "WITHDRAWAL", "TRANSFER", "TRADE")
+DES_SHORT = {"Ordinary Shares": "Ord Sh", "Preferred Shares": "Pfd Sh",
+             "ADR Preferred": "ADR Pfd", "GDR Preferred": "GDR Pfd"}
 
 
 @dataclass(frozen=True)
@@ -14,7 +15,6 @@ class BookRow:
     kind: str                     # 'cash' | 'entry' | 'line'
     entry: dict | None            # écriture (avec ses lignes) pour les actions supprimer / modifier
     cells: tuple[str, ...]
-    time: str = ""                # HH:MM (sous la date)
     sub: bool = False             # ligne d'une écriture multi-lignes
 
 
@@ -23,8 +23,9 @@ def _num(value, fmt: str) -> str:
 
 
 def _line_cells(ln: dict) -> tuple[str, ...]:
+    """Security, Lot, Des, Qty, Cost Basis, Amount, Ccy — l'Account est porté par l'en-tête."""
     return (
-        ln["instrument_name"] or "", ln["lot_id"] or "", ln["account_id"],
+        ln["instrument_name"] or "", ln["lot_id"] or "", DES_SHORT.get(ln["instrument_des"], ln["instrument_des"] or ""),
         _num(ln["quantity"], ",.4f").rstrip("0").rstrip(".") if ln["quantity"] is not None else "",
         _num(ln["cost_basis"], ",.2f"), _num(ln["amount"], "+,.2f"), ln["currency"],
     )
@@ -35,9 +36,10 @@ class BooksModel(QAbstractTableModel):
     sur une ligne ; sinon une ligne d'en-tête (actions, date, type) suivie de ses lignes.
     Ligne 0 = sentinelle <cash>."""
 
-    HEADERS = ("", "", "Date", "Type", "Security", "Lot", "Account", "Qty", "Cost Basis", "Amount", "Ccy", "")
-    _RIGHT, _CENTER = (8, 9), (5, 6, 7, 10)
-    ACTIONS_COL, DATE_COL = 1, 2
+    HEADERS = ("", "", "Account", "Date", "Type", "Security", "Lot", "Des", "Qty",
+               "Cost Basis", "Amount", "Ccy", "")
+    _RIGHT, _CENTER = (9, 10), (2, 6, 8, 11)
+    ACTIONS_COL, CASH_COL = 1, 5
     OPEN_CASH = "open_cash_dialog"
     ActionRole = Qt.UserRole + 1
     EntryRole = Qt.UserRole + 2
@@ -49,14 +51,14 @@ class BooksModel(QAbstractTableModel):
     def set_entries(self, entries: list[dict]) -> None:
         rows = [BookRow("cash", None, ())]
         for e in entries:
-            head = ("", "", e["date"], e["transaction_type"])
-            times = [(ln["created_at"] or "")[11:16] for ln in e["lines"]]
+            accounts = {ln["account_id"] for ln in e["lines"]}
+            head = ("", "", accounts.pop() if len(accounts) == 1 else "", e["date"], e["transaction_type"])
             if len(e["lines"]) == 1:
-                rows.append(BookRow("entry", e, (*head, *_line_cells(e["lines"][0]), ""), times[0]))
+                rows.append(BookRow("entry", e, (*head, *_line_cells(e["lines"][0]), "")))
                 continue
-            rows.append(BookRow("entry", e, (*head, e["external_ref"] or "", "", "", "", "", "", "", ""), min(times)))
-            for ln, t in zip(e["lines"], times):
-                rows.append(BookRow("line", e, ("", "", "", "", *_line_cells(ln), ""), t, sub=True))
+            rows.append(BookRow("entry", e, (*head, e["external_ref"] or "", "", "", "", "", "", "", "")))
+            for ln in e["lines"]:
+                rows.append(BookRow("line", e, ("", "", ln["account_id"], "", "", *_line_cells(ln), ""), sub=True))
         self.beginResetModel()
         self._rows = rows
         self.endResetModel()
@@ -85,8 +87,6 @@ class BooksModel(QAbstractTableModel):
             if col == self.ACTIONS_COL and row.kind == "entry":
                 return "✕   ✎" if row.entry["transaction_type"] in EDITABLE_TYPES else "✕"
             return row.cells[col]
-        if role == TableBorderDelegate.SubTextRole and col == self.DATE_COL:
-            return row.time
         if role == Qt.TextAlignmentRole:
             if col == self.ACTIONS_COL or col in self._CENTER:
                 return int(Qt.AlignCenter)
@@ -104,10 +104,10 @@ class BooksModel(QAbstractTableModel):
 
     def _cash_row_data(self, col, role):
         if role == Qt.DisplayRole:
-            return "<cash>" if col == 4 else ""
-        if role == Qt.ForegroundRole and col == 4:
+            return "<cash>" if col == self.CASH_COL else ""
+        if role == Qt.ForegroundRole and col == self.CASH_COL:
             return QColor(COLOR_TEXT_ACCENT)
-        if role == self.ActionRole and col == 4:
+        if role == self.ActionRole and col == self.CASH_COL:
             return self.OPEN_CASH
         if role == Qt.TextAlignmentRole:
             return int(Qt.AlignCenter)

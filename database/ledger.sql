@@ -38,17 +38,21 @@ CREATE TABLE IF NOT EXISTS accounts (
 
 INSERT OR IGNORE INTO accounts(id) VALUES ('IBK_LONG'), ('IBK_LEV');
 
--- Un CONID = un seul Name ; un symbole unique par CONID (rempli depuis IB).
+-- Un CONID = un seul instrument. `des` distingue les déclinaisons d'un même Name
+-- (Ordinary Shares, ADR, Call 500 Jan29…) : un Des ne se répète pour un Name que
+-- dans une autre devise. Symbole unique par CONID (rempli depuis IB).
 CREATE TABLE IF NOT EXISTS instruments (
     conid      TEXT PRIMARY KEY,
-    name       TEXT NOT NULL UNIQUE,
+    name       TEXT NOT NULL,
+    des        TEXT NOT NULL,
     symbol     TEXT UNIQUE,
-    type       TEXT NOT NULL CHECK(type IN ('DELTA_ONE', 'DERIVATIVES')),
+    type       TEXT NOT NULL CHECK(type IN ('SECURITY', 'DERIVATIVE')),
     currency   TEXT NOT NULL REFERENCES currencies(code),
-    expiry     TEXT,                      -- 'YYYY-MM-DD' (DERIVATIVES)
+    expiry     TEXT,                      -- 'YYYY-MM-DD' (DERIVATIVE)
     strike     REAL,
     "right"    TEXT CHECK("right" IN ('C', 'P') OR "right" IS NULL),
-    multiplier REAL NOT NULL DEFAULT 1.0
+    multiplier REAL NOT NULL DEFAULT 1.0,
+    UNIQUE(name, des, currency)
 );
 
 -- id = 'tes_01', 'tes_02', … (3 lettres du Name en minuscules + n° de trade idea) ; date_close NULL = lot actif.
@@ -82,7 +86,6 @@ CREATE INDEX IF NOT EXISTS idx_entries_date ON journal_entries(date);
 
 -- lot_id : TRADE, corporate actions, DIVIDEND, FEE imputable → renseigné ;
 --          DEPOSIT / WITHDRAWAL / TRANSFER / FX_CONV / TAX → NULL.
--- created_at : heure de saisie (tri de l'écran Books).
 CREATE TABLE IF NOT EXISTS journal_lines (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     entry_id         INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
@@ -94,7 +97,6 @@ CREATE TABLE IF NOT EXISTS journal_lines (
     currency         TEXT NOT NULL REFERENCES currencies(code),
     amount           REAL NOT NULL,
     line_type        TEXT NOT NULL CHECK(line_type IN ('ASSET_CASH', 'ASSET_SECURITY')),
-    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
     CHECK (line_type != 'ASSET_SECURITY'
            OR (instrument_conid IS NOT NULL AND quantity IS NOT NULL AND cost_basis IS NOT NULL)),
     CHECK (line_type != 'ASSET_CASH'

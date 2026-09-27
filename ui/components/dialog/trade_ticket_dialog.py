@@ -24,11 +24,21 @@ from .dialog_components import (
 logger = logging.getLogger(__name__)
 BASE_CURRENCY = "USD"
 MAX_CASH_ROWS = 4
+DES_CHOICES = ("Ordinary Shares", "Preferred Shares", "ADR", "GDR", "ADR Preferred", "GDR Preferred")
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def derivative_des(right: str, strike: str, expiry: str) -> str:
+    """'Call 500 Jan29' — vide tant que Call/Put, Strike et Expiry ne sont pas tous renseignés."""
+    try:
+        return f"{right} {float(strike):g} {_MONTHS[int(expiry[5:7]) - 1]}{expiry[2:4]}"
+    except (ValueError, IndexError):
+        return ""
 
 
 class TradeMode(Enum):
-    DELTA_ONE = "DELTA_ONE"
-    DERIVATIVES = "DERIVATIVES"
+    SECURITY = "SECURITY"
+    DERIVATIVE = "DERIVATIVE"
 
 
 class TradeTicketDialog(FramelessDialog):
@@ -42,10 +52,10 @@ class TradeTicketDialog(FramelessDialog):
         super().__init__(parent, size=(DIALOG_WIDTH_TRADE_TICKET, DIALOG_HEIGHT_TRADE_TICKET), title=title)
         self.setWindowTitle("Trade")
         self._mode, self._services, self._entry = mode, services, entry
-        self._instruments: dict[str, dict] = {}      # name → instrument
+        self._instruments: list[dict] = []           # instruments du mode (Security ou Derivative)
         self._details: dict | None = None            # contrat IB (nouvel instrument)
         self._lot_id = ""
-        is_deriv = mode == TradeMode.DERIVATIVES
+        is_deriv = mode == TradeMode.DERIVATIVE
         self.content_layout.setContentsMargins(15, 13, 0, 0)
 
         # --- Identifiants -------------------------------------------------
@@ -55,6 +65,7 @@ class TradeTicketDialog(FramelessDialog):
         self.date_edit = row.add_col(create_date_input_large())
         row.add_spacer(INTERSECTION)
         row.add_col(create_label_large()).setText("CONID")
+        self.conid_value = row.add_col(create_value_label_large("-", align_left=True))
         self.conid_edit = row.add_col(create_input_large())
         section.add_field(row.get_widget())
         row = GridRow(0)
@@ -63,8 +74,15 @@ class TradeTicketDialog(FramelessDialog):
         self.name_combo.setInsertPolicy(QComboBox.NoInsert)
         row.add_spacer(INTERSECTION)
         row.add_col(create_label_large()).setText("Position")
-        self.position_value = row.add_col(create_value_label_large("-", align_left=False))
+        self.position_value = row.add_col(create_value_label_large("-", align_left=True))
         self.position_edit = row.add_col(create_input_large())
+        section.add_field(row.get_widget())
+        row = GridRow(0)
+        row.add_col(create_label_large()).setText("Des")
+        if is_deriv:        # composé depuis Call/Put + Strike + Expiry
+            self.des_value = row.add_col(create_value_label_large("-", align_left=True))
+        else:
+            self.des_combo = row.add_col(create_combo_large(["", *DES_CHOICES]))
         section.add_field(row.get_widget())
         self.content_layout.addWidget(section.get_widget())
         self.content_layout.addSpacing(SECTION_VERTICAL_SPACING)
@@ -100,8 +118,7 @@ class TradeTicketDialog(FramelessDialog):
         row = GridRow(0)
         row.add_col(create_label_large()).setText("Currency")
         row.add_spacer(SPACER_MEDIUM)
-        self.currency_value = row.add_col(create_value_label_large("-", align_left=True))
-        self.currency_edit = row.add_col(create_input_large())
+        self.currency_combo = row.add_col(create_combo_large([""]))
         if is_deriv:
             row.add_spacer(INTERSECTION)
             row.add_col(create_label_large()).setText("Strike")
@@ -155,31 +172,60 @@ class TradeTicketDialog(FramelessDialog):
 
         self._set_new_mode(False)
         self.name_combo.currentTextChanged.connect(self._on_name_changed)
+        if is_deriv:
+            for w in (self.call_put_combo.currentTextChanged, self.strike_edit.textChanged, self.expiry_edit.textChanged):
+                w.connect(self._sync_des)
+        else:
+            self.des_combo.currentTextChanged.connect(self._on_des_changed)
+        self.currency_combo.currentTextChanged.connect(self._on_currency_changed)
         self.conid_edit.editingFinished.connect(lambda: asyncio.create_task(self._on_conid_changed()))
         self.price_edit.textChanged.connect(self._sync_base_price)
-        self.currency_edit.textChanged.connect(self._sync_base_price)
         self.account_combo.currentTextChanged.connect(lambda _: asyncio.create_task(self._refresh_cash()))
         asyncio.create_task(self._bootstrap())
 
     # ------------------------------------------------------------------ état
 
     def _set_new_mode(self, new: bool) -> None:
-        """Name inconnu → Position et Currency deviennent des champs de saisie."""
-        self.position_value.setVisible(not new)
-        self.currency_value.setVisible(not new)
-        self.position_edit.setVisible(new)
-        self.currency_edit.setVisible(new)
+        """Instrument inconnu → CONID et Position deviennent des champs de saisie."""
+        for value, edit in ((self.conid_value, self.conid_edit), (self.position_value, self.position_edit)):
+            value.setVisible(not new)
+            edit.setVisible(new)
         self._sync_base_price()
 
+    def _conid(self) -> str:
+        text = (self.conid_edit.text() if self.conid_edit.isVisible() else self.conid_value.label.text()).strip()
+        return "" if text == "-" else text
+
+    def _set_conid(self, conid: str) -> None:
+        self.conid_value.label.setText(conid or "-")
+        self.conid_edit.setText(conid)
+
     def _currency(self) -> str:
-        return (self.currency_edit.text() if self.currency_edit.isVisible() else self.currency_value.label.text()).strip().upper()
+        return self.currency_combo.currentText().strip()
 
     def _sync_base_price(self, *_) -> None:
-        """En USD le prix de base est le prix d'achat : affiché, pas saisi."""
-        usd = self._currency() == BASE_CURRENCY
-        self.base_edit.setVisible(not usd)
-        self.base_value.setVisible(usd)
-        self.base_value.label.setText(self.price_edit.text())
+        """Le prix de base n'est saisi qu'en devise étrangère ; en USD il vaut le prix d'achat."""
+        foreign = self._currency() not in ("", BASE_CURRENCY)
+        self.base_edit.setVisible(foreign)
+        self.base_value.setVisible(not foreign)
+        self.base_value.label.setText(self.price_edit.text().strip() or "-")
+
+    def _des(self) -> str:
+        text = (self.des_value.label.text() if self._mode == TradeMode.DERIVATIVE
+                else self.des_combo.currentText()).strip()
+        return "" if text == "-" else text
+
+    def _set_des(self, des: str) -> None:
+        if self._mode == TradeMode.DERIVATIVE:
+            self.des_value.label.setText(des or "-")
+        else:
+            self.des_combo.blockSignals(True)
+            self.des_combo.setCurrentText(des)
+            self.des_combo.blockSignals(False)
+
+    def _sync_des(self, *_) -> None:
+        self.des_value.label.setText(
+            derivative_des(self.call_put_combo.currentText(), self.strike_edit.text(), self.expiry_edit.text()) or "-")
 
     def _set_margin(self, clicked: TabButton) -> None:
         for btn in self.margin_buttons:
@@ -190,27 +236,31 @@ class TradeTicketDialog(FramelessDialog):
 
     async def _bootstrap(self) -> None:
         try:
-            instruments = await self._services.ledger.list_instruments()
+            instruments, currencies = await asyncio.gather(
+                self._services.ledger.list_instruments(), self._services.ledger.list_currencies())
         except Exception as ex:
             logger.exception("Trade ticket bootstrap failed")
             QMessageBox.critical(self, "Error", f"Failed to load ledger data: {ex}")
             return
-        self._instruments = {i["name"]: i for i in instruments}
-        active = sorted(i["name"] for i in instruments if i["active"] and i["type"] == self._mode.value)
-        self.name_combo.blockSignals(True)
-        self.name_combo.clear()
-        self.name_combo.addItems(["", *active])
-        self.name_combo.blockSignals(False)
+        self._instruments = [i for i in instruments if i["type"] == self._mode.value]
+        active = sorted({i["name"] for i in self._instruments if i["active"]})
+        for combo, items in ((self.name_combo, active), (self.currency_combo, currencies)):
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItems(["", *items])
+            combo.blockSignals(False)
         await self._refresh_cash()
         if self._entry:
             self._prefill(self._entry)
 
     def _prefill(self, entry: dict) -> None:
         security = next(ln for ln in entry["lines"] if ln["instrument_conid"])
-        inst = next((i for i in self._instruments.values() if i["conid"] == security["instrument_conid"]), None)
+        inst = self._by_conid(security["instrument_conid"])
         self.date_edit.setDate(self.date_edit.date().fromString(entry["date"], "yyyy-MM-dd"))
         self.name_combo.setCurrentText(inst["name"] if inst else "")
-        self.conid_edit.setText(security["instrument_conid"])
+        self._set_des(inst["des"] if inst else "")
+        self.currency_combo.setCurrentText(security["currency"])
+        self._set_conid(security["instrument_conid"])
         qty = abs(security["quantity"])
         self.side_combo.setCurrentText("Buy" if security["quantity"] > 0 else "Sell")
         self.quantity_edit.setText(f"{qty:g}")
@@ -222,28 +272,52 @@ class TradeTicketDialog(FramelessDialog):
         self._lot_id = security["lot_id"] or ""
         self.lot_value.label.setText(self._lot_id)
 
+    def _by_conid(self, conid: str) -> dict | None:
+        return next((i for i in self._instruments if i["conid"] == conid), None)
+
     def _on_name_changed(self, text: str) -> None:
+        """Le Name ne présélectionne rien : Des, Currency et CONID restent à choisir."""
         text = text.strip()
         self.name_combo.lineEdit().setReadOnly(self.name_combo.findText(text) > 0)   # Name de la liste : verrouillé
-        inst = self._instruments.get(text)
-        if inst is None:
-            self._details = None
-            self._set_new_mode(bool(text))
-            self.currency_edit.clear()
-            self.position_edit.clear()
-            if not text:                                   # ligne vide : état d'ouverture
-                self.conid_edit.clear()
-                self.position_value.label.setText("-")
-                self.currency_value.label.setText("-")
-                if self._mode == TradeMode.DERIVATIVES:
-                    self.strike_edit.clear(); self.expiry_edit.clear(); self.call_put_combo.setCurrentIndex(0)
-            self._set_lot(None, text)
-            return
-        self._set_new_mode(False)
-        self.conid_edit.setText(inst["conid"])
-        self.currency_value.label.setText(inst["currency"])
+        self._details = None
+        self._set_conid("")
+        self.currency_combo.setCurrentIndex(0)
+        if self._mode != TradeMode.DERIVATIVE:
+            self._set_des("")
+        self._resolve()
+
+    def _on_des_changed(self, _text: str) -> None:
+        """Le Des ne présélectionne pas la devise : le triplet n'est résolu qu'une fois complet."""
+        self._resolve()
+
+    def _on_currency_changed(self, _text: str) -> None:
         self._sync_base_price()
-        if self._mode == TradeMode.DERIVATIVES:
+        self._resolve()
+
+    def _resolve(self) -> None:
+        """Name + Des + Currency identifient l'instrument (clé unique). Tant qu'un choix manque,
+        CONID et Position restent en attente ; dès qu'un choix ne correspond à rien, ils passent
+        en saisie — c'est un nouvel instrument."""
+        name, des, ccy = self.name_combo.currentText().strip(), self._des(), self._currency()
+        candidates = [i for i in self._instruments if i["name"] == name]
+        if des:
+            candidates = [i for i in candidates if i["des"] == des]
+        if ccy:
+            candidates = [i for i in candidates if i["currency"] == ccy]
+        self._set_new_mode(bool(name) and not candidates)
+
+        inst = candidates[0] if (candidates and des and ccy) else None
+        if inst is None:
+            if self._by_conid(self._conid()):     # CONID hérité d'une autre déclinaison
+                self._set_conid("")
+            self.position_edit.clear()
+            self.position_value.label.setText("-")
+            same = next((i for i in self._instruments if i["name"] == name), None)
+            self._set_lot(None, name, same["conid"] if same else None)
+            return
+        self._details = None
+        self._set_conid(inst["conid"])
+        if self._mode == TradeMode.DERIVATIVE:
             self.strike_edit.setText("" if inst["strike"] is None else f"{inst['strike']:g}")
             self.expiry_edit.setText(inst["expiry"] or "")
             self.call_put_combo.setCurrentText({"C": "Call", "P": "Put"}.get(inst["right"] or "", ""))
@@ -251,7 +325,7 @@ class TradeTicketDialog(FramelessDialog):
 
     async def _load_context(self, inst: dict) -> None:
         ctx = await self._services.ledger.instrument_context(inst["conid"])
-        if self.conid_edit.text().strip() != inst["conid"]:
+        if self._conid() != inst["conid"]:
             return
         self.position_value.label.setText(f"{ctx['position']:,.4f}".rstrip("0").rstrip("."))
         self._set_lot(ctx["lot_id"], inst["name"], inst["conid"])
@@ -270,10 +344,13 @@ class TradeTicketDialog(FramelessDialog):
         asyncio.create_task(_next())
 
     async def _on_conid_changed(self) -> None:
-        conid = self.conid_edit.text().strip()
-        known = next((i for i in self._instruments.values() if i["conid"] == conid), None)
+        conid = self._conid()
+        known = self._by_conid(conid)
         if known is not None:
             self.name_combo.setCurrentText(known["name"])
+            self._set_des(known["des"])
+            self.currency_combo.setCurrentText(known["currency"])
+            self._set_conid(conid)
             return
         if not conid or not self._services.market.connected:
             return
@@ -283,8 +360,9 @@ class TradeTicketDialog(FramelessDialog):
         self._details = details
         if not self.name_combo.currentText().strip():
             self.name_combo.setCurrentText(details["name"])
-        self.currency_edit.setText(details["currency"])
-        if self._mode == TradeMode.DERIVATIVES:
+        self.currency_combo.setCurrentText(details["currency"])
+        self._set_conid(conid)
+        if self._mode == TradeMode.DERIVATIVE:
             self.strike_edit.setText("" if details["strike"] is None else f"{details['strike']:g}")
             self.expiry_edit.setText(details["expiry"] or "")
             self.call_put_combo.setCurrentText({"C": "Call", "P": "Put"}.get(details["right"] or "", ""))
@@ -305,15 +383,18 @@ class TradeTicketDialog(FramelessDialog):
         asyncio.create_task(self._do_save())
 
     async def _do_save(self) -> None:
-        is_deriv = self._mode == TradeMode.DERIVATIVES
-        name, conid, currency = self.name_combo.currentText().strip(), self.conid_edit.text().strip(), self._currency()
-        inst = self._instruments.get(name)
+        is_deriv = self._mode == TradeMode.DERIVATIVE
+        name, conid, currency = self.name_combo.currentText().strip(), self._conid(), self._currency()
+        des = self._des()
+        inst = self._by_conid(conid)
         try:
             side = {"Buy": "BUY", "Sell": "SELL"}[self.side_combo.currentText()]
             quantity, price = float(self.quantity_edit.text()), float(self.price_edit.text())
             base = price if currency == BASE_CURRENCY or not self.base_edit.text().strip() else float(self.base_edit.text())
             if not name or not conid or not currency or currency == "-":
                 raise ValueError("Name, CONID and Currency are required")
+            if not des:
+                raise ValueError("Des is required")
             if not self._lot_id:
                 raise ValueError("Lot ID is not resolved yet")
             if is_deriv:
@@ -326,7 +407,7 @@ class TradeTicketDialog(FramelessDialog):
             QMessageBox.critical(self, "Error", str(ex))
             return
         multiplier = (self._details or inst or {}).get("multiplier") or (100.0 if is_deriv else 1.0)
-        msg = f"{side} {quantity:g} {name} @ {price:g} {currency}" + (f" {right} {strike:g} {expiry}" if is_deriv else "")
+        msg = f"{side} {quantity:g} {name} {des} @ {price:g} {currency}"
         self.hide()
         if OrderDialog(msg, self).exec() != QDialog.DialogCode.Accepted:
             self.show(); self.raise_(); self.activateWindow()
@@ -335,7 +416,7 @@ class TradeTicketDialog(FramelessDialog):
         try:
             await self._services.ledger.add_trade(
                 date=self.date_edit.date().toString("yyyy-MM-dd"), account=self.account_combo.currentText(),
-                conid=conid, name=name, type=self._mode.value, currency=currency, side=side,
+                conid=conid, name=name, des=des, type=self._mode.value, currency=currency, side=side,
                 quantity=quantity, price=price, cost_basis=base, lot_id=self._lot_id,
                 expiry=expiry, strike=strike, right=right, multiplier=multiplier,
                 symbol=(self._details or {}).get("symbol"),
@@ -348,11 +429,11 @@ class TradeTicketDialog(FramelessDialog):
             QMessageBox.critical(self, "Error", str(ex))
 
 
-class DeltaOneDialog(TradeTicketDialog):
+class SecurityDialog(TradeTicketDialog):
     def __init__(self, parent=None, *, services: ServiceContainer, entry: dict | None = None):
-        super().__init__(parent, mode=TradeMode.DELTA_ONE, title="Delta-One Trade Ticket", services=services, entry=entry)
+        super().__init__(parent, mode=TradeMode.SECURITY, title="Security Trade Ticket", services=services, entry=entry)
 
 
-class DerivativesDialog(TradeTicketDialog):
+class DerivativeDialog(TradeTicketDialog):
     def __init__(self, parent=None, *, services: ServiceContainer, entry: dict | None = None):
-        super().__init__(parent, mode=TradeMode.DERIVATIVES, title="Derivatives Trade Ticket", services=services, entry=entry)
+        super().__init__(parent, mode=TradeMode.DERIVATIVE, title="Derivative Trade Ticket", services=services, entry=entry)

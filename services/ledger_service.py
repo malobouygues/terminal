@@ -53,11 +53,11 @@ class SqliteLedgerService:
     async def next_lot_id(self, name: str, conid: str | None = None) -> str:
         return await asyncio.to_thread(ledger_db.next_lot_id, name, conid)
 
-    async def add_trade(self, *, date, account, conid, name, type, currency, side, quantity,
+    async def add_trade(self, *, date, account, conid, name, des, type, currency, side, quantity,
                         price, cost_basis, lot_id, expiry=None, strike=None, right=None,
                         multiplier=1.0, symbol=None, replace_id=None) -> None:
         def _do():
-            ledger_db.upsert_instrument(conid, name, type, currency, expiry, strike, right, multiplier, symbol)
+            ledger_db.upsert_instrument(conid, name, des, type, currency, expiry, strike, right, multiplier, symbol)
             if ledger_db.get_lot(lot_id) is None:
                 ledger_db.create_lot(lot_id, date)
             if replace_id is None:

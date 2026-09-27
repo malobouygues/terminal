@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QEvent, Signal, QModelIndex, QAbstractItemModel
 from PySide6.QtGui import QPainter, QPen, QColor, QBrush, QCursor, QMouseEvent, QFont
 from ..styles import (
-    COLOR_BLACK, COLOR_TABLE_BORDER, WIDGET_HEIGHT_HEADER, TABLE_BORDER_WIDTH, FONT_SIZE_SMALL,
+    COLOR_BLACK, COLOR_TABLE_BORDER, WIDGET_HEIGHT_HEADER, TABLE_BORDER_WIDTH,
     COLOR_TABLE_TEXT, get_prop_font_name, COLOR_TAB_ACTIVE_BG, COLOR_TAB_INACTIVE_BG,
     COLOR_TAB_ACTIVE_TEXT, COLOR_TAB_INACTIVE_TEXT, COLOR_GRAY_LIGHT, COLOR_GRAY_DARK,
     COLOR_BUTTON_HOVER, COLOR_GRAY_HOVER, FONT_SIZE_MEDIUM, SPACING_LARGE, WIDGET_HEIGHT_TAB,
@@ -102,9 +102,12 @@ class RatioHeaderView(ResizableHeaderView):
         if total_ratio <= 0:
             return
         widths = {col: int((ratio / total_ratio) * available_width) for col, ratio in self._column_ratios.items()}
+        # Les écarts d'arrondi et de barre de défilement sont absorbés par la colonne la plus
+        # large, la seule dont le contenu tolère quelques pixels de moins.
+        widest = max(self._column_ratios, key=self._column_ratios.get)
         diff = available_width - sum(widths.values())
         if diff and widths:
-            widths[max(self._column_ratios.keys())] += diff
+            widths[widest] += diff
         for col, width in widths.items():
             tbl.setColumnWidth(col, width)
             self.setSectionResizeMode(col, QHeaderView.Fixed)
@@ -114,16 +117,12 @@ class RatioHeaderView(ResizableHeaderView):
         if column_count and viewport_width > 0:
             actual_total = sum(tbl.columnWidth(i) for i in range(column_count))
             if actual_total != viewport_width:
-                last_col = max(self._column_ratios.keys())
-                tbl.setColumnWidth(last_col, tbl.columnWidth(last_col) + (viewport_width - actual_total))
+                tbl.setColumnWidth(widest, tbl.columnWidth(widest) + (viewport_width - actual_total))
 
 
 class TableBorderDelegate(QStyledItemDelegate):
     """Model-based delegate. Reads background/foreground/text/alignment from the
-    model via ``index.data(role)`` — no widget-item lookup required.
-    ``SubTextRole`` : texte secondaire (petit, gris) peint sous le texte principal."""
-
-    SubTextRole = Qt.UserRole + 10
+    model via ``index.data(role)`` — no widget-item lookup required."""
 
     def __init__(self, border_column_count: int, text_color_fallback=COLOR_TABLE_TEXT):
         super().__init__()
@@ -143,20 +142,8 @@ class TableBorderDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         rect = option.rect
         bg_color = self._color_from(index.data(Qt.BackgroundRole))
-        sub_text = index.data(self.SubTextRole)
 
-        if sub_text:
-            painter.save()
-            main_text = str(index.data(Qt.DisplayRole) or "")
-            cell = rect.adjusted(5, 2, -5, -2)
-            if main_text:
-                painter.setPen(self._color_from(index.data(Qt.ForegroundRole)) or QColor(self.text_color_fallback))
-                painter.drawText(cell, int(Qt.AlignLeft | Qt.AlignTop), main_text)
-            painter.setFont(QFont(get_prop_font_name(), FONT_SIZE_SMALL))
-            painter.setPen(QColor(COLOR_GRAY_LIGHT))
-            painter.drawText(cell, int(Qt.AlignLeft | (Qt.AlignBottom if main_text else Qt.AlignVCenter)), str(sub_text))
-            painter.restore()
-        elif bg_color is not None and bg_color.alpha() > 0:
+        if bg_color is not None and bg_color.alpha() > 0:
             clipped_rect = rect.adjusted(1, 0, -2, 0)
             painter.save()
             painter.setClipRect(clipped_rect)

@@ -24,6 +24,7 @@ class HoldingRow:
     lot_id:           str | None
     conid:            str
     name:             str
+    des:              str            # déclinaison : 'Ordinary Shares', 'ADR', 'Call 500 Jan29'…
     type:             str
     currency:         str
     qty:              float            # nombre × multiplicateur
@@ -35,18 +36,6 @@ class HoldingRow:
     unrealized_usd:   float | None
     realized_usd:     float            # niveau lot
     total_return_usd: float | None     # niveau lot
-
-
-def display_name(pos: dict) -> str:
-    """DERIVATIVES : '<conid> <strike> DD MM YY / Call|Put' ; sinon le Name."""
-    if pos["type"] != "DERIVATIVES":
-        return pos["name"]
-    expiry = pos.get("expiry") or ""
-    if len(expiry) == 10:
-        expiry = f"{expiry[8:10]} {expiry[5:7]} {expiry[2:4]}"
-    right = {"C": "Call", "P": "Put"}.get(pos.get("right") or "", "")
-    strike = f"{pos['strike']:g}" if pos.get("strike") is not None else ""
-    return " ".join(p for p in (pos["conid"], strike, expiry) if p) + (f" / {right}" if right else "")
 
 
 def _lot_aggregates(ledger, fx) -> tuple[dict, dict]:
@@ -107,7 +96,7 @@ def holdings() -> list[HoldingRow]:
             unrl = mv - cost.get((pos["conid"], pos["lot_id"], pos["account_id"]), 0.0)
         lot = lots.get(pos["lot_id"], {"realized": 0.0, "income": 0.0, "fees": 0.0})
         rows.append(HoldingRow(
-            pos["lot_id"], pos["conid"], display_name(pos), pos["type"], pos["currency"],
+            pos["lot_id"], pos["conid"], pos["name"], pos["des"], pos["type"], pos["currency"],
             qty * mult, pos["first_buy"], pos["last_sell"], pos["date_close"], last, mv, unrl,
             lot["realized"], lot["realized"] + lot["income"] + lot["fees"],
         ))

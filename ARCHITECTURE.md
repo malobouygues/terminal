@@ -44,7 +44,7 @@ terminal/
     ├── components/
     │   ├── widgets.py       # BloombergTableView, RatioHeaderView, TableBorderDelegate, TabButton, …
     │   ├── charts/          # PieChartWidget, LineChartWidget
-    │   └── dialog/          # FramelessDialog, TradeTicketDialog (Delta-One / Derivatives),
+    │   └── dialog/          # FramelessDialog, TradeTicketDialog (Security / Derivative),
     │                        # CashDialog, CheckDialog, OrderDialog, dialog_components
     └── pages/               # home, liquid (function bar), holdings, books, performance
 ```
@@ -68,26 +68,26 @@ Le terminal s'ouvre même sans IB Gateway (cache market_data.db).
 
 | Base | Tables | Rôle |
 |------|--------|------|
-| `ledger.db` | currencies, accounts (IBK_LONG / IBK_LEV), instruments (conid, name UNIQUE, symbol UNIQUE), lots (`Tes_01` = 3 lettres du Name, 3e lettre décalée si le préfixe est pris par une autre security, + n° de trade idea ; date_close), lot_instruments, journal_entries, journal_lines (created_at = heure locale) | source de vérité |
+| `ledger.db` | currencies, accounts (IBK_LONG / IBK_LEV), instruments (conid, name + des + currency UNIQUE, symbol UNIQUE, type SECURITY / DERIVATIVE), lots (`tes_01` = 3 lettres du Name en minuscules, 3e lettre décalée si le préfixe est pris par une autre security, + n° de trade idea ; date_close), lot_instruments, journal_entries, journal_lines | source de vérité |
 | `market_data.db` | close_prices, fx_rates (rate_usd), live_prices, cash_balances | cache refetchable |
 | `analytics.db` | performance (date, securities_usd, cash_usd, nav_usd, flows_usd, daily_return, twr_cumul) | recalculée au démarrage |
 
 Cotation manquante → dernier cours disponible avant la date. Un lot clôturé n'accepte plus
 d'écriture. Une écriture se corrige entière depuis Books (✕ supprime, ✎ rouvre le dialog et
-remplace ; l'heure de saisie d'origine est conservée) ; un lot vidé est supprimé, un lot dont
-la cession est retirée est rouvert.
+remplace) ; un lot vidé est supprimé, un lot dont la cession est retirée est rouvert.
 
 ## 5. Écrans
 
 - **Holdings / Main View** : table LIVE (lots actifs par valeur de marché, puis une ligne par
-  devise de cash convertie en USD) + HISTORIQUE (lots clôturés par date : bandeau "Last Sell",
+  devise de cash convertie en USD ; un lot multi-instruments affiche le Name puis une sous-ligne
+  par Des, suffixée de la devise quand deux Des sont identiques) + HISTORIQUE (lots clôturés par date : bandeau "Last Sell",
   Rlzd PnL sous la colonne Last, rien au-delà) ; `last update` en haut à droite.
   Lot multi-instruments = ligne agrégée + sous-lignes.
 - **Holdings / Allocation** : % du portefeuille par Name (+ Cash), camembert horaire depuis le haut.
-- **Books** : journal_entries (date desc, heure sous la date) et leurs journal_lines (écriture à
-  une ligne = une seule ligne) ; ✕ / ✎ par écriture ; `<cash>` → CashDialog ; Add Delta-One /
-  Derivatives → TradeTicketDialog ; Check → données brutes journalières (clôtures, cash, FX) sur
-  une plage de dates.
+- **Books** : journal_entries (date desc) et leurs journal_lines (écriture à une ligne = une
+  seule ligne) ; ✕ / ✎ par écriture ; `<cash>` → CashDialog ; Add Security / Derivative →
+  TradeTicketDialog ; Check → données brutes journalières (clôtures, cash, FX) sur une plage
+  de dates.
 - **Performance** : Value (NAV USD) / Performance (TWR), périodes All-time … 1M (YTD + Performance
   par défaut), échelle adaptative.
 

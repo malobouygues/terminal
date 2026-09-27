@@ -11,7 +11,6 @@
 """
 
 import sqlite3
-from datetime import datetime
 
 from .ledger_con import (
     LedgerLine, LINE_ASSET_CASH, LINE_ASSET_SECURITY,
@@ -50,13 +49,7 @@ def _insert_entry(conn, date: str, transaction_type: str, external_ref: str | No
     return int(cur.lastrowid)
 
 
-def _now() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")     # heure locale (Paris)
-
-
-def _insert_lines(conn, entry_id: int, lines: list[LedgerLine],
-                  check_lots: bool = True, created_at: str | None = None) -> None:
-    created_at = created_at or _now()
+def _insert_lines(conn, entry_id: int, lines: list[LedgerLine], check_lots: bool = True) -> None:
     for ln in lines:
         validate_account(conn, ln.account_id)
         validate_currency(conn, ln.currency)
@@ -66,25 +59,22 @@ def _insert_lines(conn, entry_id: int, lines: list[LedgerLine],
             """
             INSERT INTO journal_lines
                 (entry_id, account_id, instrument_conid, lot_id, quantity, cost_basis,
-                 currency, amount, line_type, created_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
+                 currency, amount, line_type)
+            VALUES (?,?,?,?,?,?,?,?,?)
             """,
             (entry_id, ln.account_id, ln.instrument_conid, ln.lot_id, ln.quantity, ln.cost_basis,
-             ln.currency, ln.amount, ln.line_type, created_at),
+             ln.currency, ln.amount, ln.line_type),
         )
 
 
-def _delete_entry(conn, entry_id: int, keep_lots: bool = False) -> str | None:
+def _delete_entry(conn, entry_id: int, keep_lots: bool = False) -> None:
     """Supprime l'écriture (lignes en cascade) et ajuste le cycle de vie des lots touchés
-    (keep_lots : remplacement en cours, le lot vide est conservé pour la réinsertion).
-    Retourne l'heure de saisie d'origine (conservée lors d'un remplacement)."""
+    (keep_lots : remplacement en cours, le lot vide est conservé pour la réinsertion)."""
     lines = conn.execute(
-        "SELECT lot_id, MIN(created_at) AS created_at FROM journal_lines WHERE entry_id = ? GROUP BY lot_id",
-        (entry_id,),
+        "SELECT DISTINCT lot_id FROM journal_lines WHERE entry_id = ?", (entry_id,)
     ).fetchall()
     if not lines:
         raise ValueError(f"Unknown journal entry: {entry_id}")
-    created_at = min(ln["created_at"] for ln in lines)
     conn.execute("DELETE FROM journal_entries WHERE id = ?", (entry_id,))
     for lot_id in {ln["lot_id"] for ln in lines if ln["lot_id"]}:
         if conn.execute("SELECT 1 FROM journal_lines WHERE lot_id = ? LIMIT 1", (lot_id,)).fetchone() is None:
@@ -92,7 +82,6 @@ def _delete_entry(conn, entry_id: int, keep_lots: bool = False) -> str | None:
                 conn.execute("DELETE FROM lots WHERE id = ?", (lot_id,))
         else:
             _close_lot_if_flat(conn, lot_id, None)
-    return created_at
 
 
 def delete_entry(entry_id: int) -> None:
@@ -104,11 +93,12 @@ def delete_entry(entry_id: int) -> None:
 def _write(date: str, tx_type: str, external_ref: str | None, lines: list[LedgerLine],
            replace_id: int | None = None) -> int:
     """Une écriture = une transaction SQLite (entry + toutes ses lignes).
-    replace_id : écriture remplacée (supprimée dans la même transaction, heure conservée)."""
+    replace_id : écriture remplacée (supprimée dans la même transaction)."""
     with get_conn() as conn:
-        created_at = _delete_entry(conn, replace_id) if replace_id else None
+        if replace_id:
+            _delete_entry(conn, replace_id)
         entry_id = _insert_entry(conn, date, tx_type, external_ref)
-        _insert_lines(conn, entry_id, lines, created_at=created_at)
+        _insert_lines(conn, entry_id, lines)
         conn.commit()
         return entry_id
 
@@ -250,7 +240,8 @@ def add_trade(
         raise ValueError(f"side must be BUY or SELL, got {side!r}")
     sign = +1 if side == "BUY" else -1
     with get_conn() as conn:
-        created_at = _delete_entry(conn, replace_id, keep_lots=True) if replace_id else None
+        if replace_id:
+            _delete_entry(conn, replace_id, keep_lots=True)
         if side == "BUY" and cost_basis is None:
             raise ValueError("cost_basis is required on BUY (unit price, fees included)")
         if side == "SELL":
@@ -263,7 +254,7 @@ def add_trade(
             LedgerLine(account_id, conid, lot_id, sign * quantity, cost_basis,
                        currency, sign * amount, LINE_ASSET_SECURITY),
             LedgerLine(account_id, None, lot_id, None, None, currency, -sign * amount, LINE_ASSET_CASH),
-        ], check_lots=replace_id is None, created_at=created_at)
+        ], check_lots=replace_id is None)
         _close_lot_if_flat(conn, lot_id, date)
         conn.commit()
         return entry_id
@@ -365,7 +356,7 @@ def apply_rights(date: str, account_id: str, lot_id: str, rights_conid: str, und
             raise ValueError(f"Unknown underlying instrument: {underlying_conid!r}")
         ccy = underlying["currency"]
         conn.execute(
-            "INSERT OR IGNORE INTO instruments (conid, name, type, currency) VALUES (?,?,'DELTA_ONE',?)",
+            "INSERT OR IGNORE INTO instruments (conid, name, des, type, currency) VALUES (?,?,'Rights','SECURITY',?)",
             (rights_conid, rights_name or f"{underlying['name']} rights", ccy),
         )
         lines = [LedgerLine(account_id, rights_conid, lot_id, -qty_rights, 0.0, ccy, 0.0, LINE_ASSET_SECURITY)]

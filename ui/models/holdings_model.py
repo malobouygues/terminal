@@ -88,9 +88,20 @@ def _pct(part: float | None, total: float | None) -> float | None:
     return None if part is None or not total else 100.0 * part / total
 
 
-def _row(h: dict, closed: bool, sub: bool = False) -> HoldingsRow:
+def _label(h: dict) -> str:
+    """Lot mono-instrument : le Name (complété du Des pour un dérivé, qui le distingue)."""
+    return f"{h['name']} {h['des']}".strip() if h["type"] == "DERIVATIVE" else h["name"]
+
+
+def _sub_labels(hs: list[dict]) -> list[str]:
+    """Sous-lignes : le Des, suffixé de la devise quand deux Des sont identiques."""
+    dupes = {h["des"] for h in hs if sum(x["des"] == h["des"] for x in hs) > 1}
+    return [f"{h['des']} ({h['currency']})" if h["des"] in dupes else h["des"] for h in hs]
+
+
+def _row(h: dict, closed: bool, label: str | None = None, sub: bool = False) -> HoldingsRow:
     return HoldingsRow(
-        name=h["name"], init_buy=h["init_buy"], qty=h["qty"], last_sell=h["last_sell"],
+        name=label or h["name"], init_buy=h["init_buy"], qty=h["qty"], last_sell=h["last_sell"],
         last=h["last"], market_value=h["market_value_usd"],
         pnl=h["realized_usd"] if closed else _pct(h["unrealized_usd"], h["total_return_usd"]),
         total_return=h["total_return_usd"], sub=sub,
@@ -103,15 +114,16 @@ def cash_row(currency: str, usd: float) -> HoldingsRow:
 
 def build_holdings_rows(holdings: list[dict], closed: bool) -> list[HoldingsRow]:
     """Lignes par lot. LIVE : lots triés par valeur de marché décroissante ; HIST : par date
-    de clôture décroissante. Un lot multi-instruments = ligne agrégée + sous-lignes par
-    valeur de marché décroissante."""
+    de clôture décroissante, puis par Name. Un lot multi-instruments = ligne agrégée (Name) +
+    une sous-ligne par instrument (Des), par valeur de marché décroissante."""
     lots: dict[str | None, list[dict]] = {}
     for h in holdings:
         if (h["date_close"] is not None) == closed:
             lots.setdefault(h["lot_id"], []).append(h)
     mv = lambda h: h["market_value_usd"] or 0.0
     if closed:
-        ordered = sorted(lots.values(), key=lambda hs: max(h["date_close"] for h in hs), reverse=True)
+        ordered = sorted(lots.values(), key=lambda hs: min(h["name"] for h in hs))
+        ordered.sort(key=lambda hs: max(h["date_close"] for h in hs), reverse=True)
     else:
         ordered = sorted(lots.values(), key=lambda hs: -sum(mv(h) for h in hs))
 
@@ -119,7 +131,7 @@ def build_holdings_rows(holdings: list[dict], closed: bool) -> list[HoldingsRow]
     for hs in ordered:
         hs = sorted(hs, key=lambda h: -mv(h))
         if len(hs) == 1:
-            rows.append(_row(hs[0], closed))
+            rows.append(_row(hs[0], closed, _label(hs[0])))
             continue
         total_mv = sum(mv(h) for h in hs) if any(h["market_value_usd"] is not None for h in hs) else None
         unrl = None if any(h["unrealized_usd"] is None and h["qty"] for h in hs) \
@@ -130,5 +142,5 @@ def build_holdings_rows(holdings: list[dict], closed: bool) -> list[HoldingsRow]
             pnl=hs[0]["realized_usd"] if closed else _pct(unrl, hs[0]["total_return_usd"]),
             total_return=hs[0]["total_return_usd"],
         ))
-        rows.extend(_row(h, closed, sub=True) for h in hs)
+        rows.extend(_row(h, closed, label, sub=True) for h, label in zip(hs, _sub_labels(hs)))
     return rows

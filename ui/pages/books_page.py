@@ -12,15 +12,16 @@ from ..styles import (
     get_white_label_style,
 )
 from ..components.widgets import ClickableLabel, BloombergTableView, TableBorderDelegate, RatioHeaderView, create_bottom_bar
-from ..components.dialog import DerivativesDialog, DeltaOneDialog, CashDialog, CheckDialog, OrderDialog
+from ..components.dialog import DerivativeDialog, SecurityDialog, CashDialog, CheckDialog, OrderDialog
 from ..models import BooksModel
 from services import ServiceContainer
 
 logger = logging.getLogger(__name__)
 
-_BOOKS_FIXED_WIDTHS = {0: TABLE_COLUMN_EMPTY_WIDTH, 1: 76, 11: TABLE_COLUMN_EMPTY_WIDTH}   # col. 1 : ✕ / ✎
-_BOOKS_RATIOS = {2: 1.0, 3: 1.0, 4: 1.2, 5: 1.0, 6: 1.0, 7: 1.0, 8: 1.2, 9: 1.2, 10: 1.0}
-BOOKS_ROW_HEIGHT = 38     # deux lignes : date + heure
+_BOOKS_FIXED_WIDTHS = {0: TABLE_COLUMN_EMPTY_WIDTH, 1: 76, 12: TABLE_COLUMN_EMPTY_WIDTH}   # col. 1 : ✕ / ✎
+# Largeurs calées sur le contenu le plus long de chaque colonne ; l'excédent va à Security,
+# seule colonne dont les valeurs (noms complets) dépassent toute largeur raisonnable.
+_BOOKS_RATIOS = {2: 0.9, 3: 1.0, 4: 1.05, 5: 2.95, 6: 0.6, 7: 0.65, 8: 0.75, 9: 0.85, 10: 0.85, 11: 0.45}
 
 
 class BooksTableView(BloombergTableView):
@@ -53,8 +54,8 @@ class BooksPage(QWidget):
         add_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         add_label.setFixedHeight(WIDGET_HEIGHT_TAB)
         create_layout.addWidget(add_label)
-        for text, handler in (("Delta-One", lambda: self._open_trade_dialog(DeltaOneDialog)),
-                              ("Derivatives", lambda: self._open_trade_dialog(DerivativesDialog))):
+        for text, handler in (("Security", lambda: self._open_trade_dialog(SecurityDialog)),
+                              ("Derivative", lambda: self._open_trade_dialog(DerivativeDialog))):
             label = ClickableLabel(text, font_size=FONT_SIZE_MEDIUM)
             label.setStyleSheet(get_white_label_style(FONT_SIZE_MEDIUM))
             label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -73,13 +74,12 @@ class BooksPage(QWidget):
 
         self.table = BooksTableView(self.books_model, empty_column_widths=_BOOKS_FIXED_WIDTHS)
         self.table.setMouseTracking(True)
-        self.table.verticalHeader().setDefaultSectionSize(BOOKS_ROW_HEIGHT)
         header = RatioHeaderView(Qt.Horizontal, self.table, fixed_widths=_BOOKS_FIXED_WIDTHS,
                                  column_ratios=_BOOKS_RATIOS, width_provider=self.width,
-                                 border_color=COLOR_BLACK, border_column_count=11)
+                                 border_color=COLOR_BLACK, border_column_count=12)
         self.table.setHorizontalHeader(header)
         QTimer.singleShot(0, header._update_column_widths)
-        self.table.setItemDelegate(TableBorderDelegate(border_column_count=11, text_color_fallback=COLOR_TEXT_NORMAL))
+        self.table.setItemDelegate(TableBorderDelegate(border_column_count=12, text_color_fallback=COLOR_TEXT_NORMAL))
         self.table.clicked.connect(self._on_index_clicked)
         root_layout.addWidget(self.table, 1)
         root_layout.addWidget(create_bottom_bar(), 0)
@@ -127,7 +127,7 @@ class BooksPage(QWidget):
             self._after_dialog(CashDialog(self, ledger=self._services.ledger, entry=entry))
             return
         security = next(ln for ln in entry["lines"] if ln["instrument_conid"])
-        dialog_cls = DerivativesDialog if security["instrument_type"] == "DERIVATIVES" else DeltaOneDialog
+        dialog_cls = DerivativeDialog if security["instrument_type"] == "DERIVATIVE" else SecurityDialog
         self._after_dialog(dialog_cls(self, services=self._services, entry=entry))
 
     def _delete_entry(self, entry: dict) -> None:

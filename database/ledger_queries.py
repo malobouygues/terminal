@@ -7,7 +7,7 @@ def get_positions(open_only: bool = True) -> list[dict]:
     """Par (instrument × lot × compte) : qty, basis (Σ q·cb + ajustements), first_buy, last_sell."""
     sql = f"""
         SELECT jl.instrument_conid AS conid, jl.lot_id, jl.account_id,
-               i.name, i.type, i.currency, i.multiplier, i.expiry, i.strike, i."right",
+               i.name, i.des, i.type, i.currency, i.multiplier, i.expiry, i.strike, i."right",
                l.date_open, l.date_close,
                SUM(jl.quantity) AS qty,
                SUM(CASE WHEN jl.quantity = 0 THEN jl.cost_basis ELSE jl.quantity * jl.cost_basis END) AS basis,
@@ -50,12 +50,10 @@ def get_currencies_for_account(account_id: str) -> list[str]:
 
 
 def get_entries(limit: int | None = None) -> list[dict]:
-    """Écritures avec leurs lignes. Tri : date desc, puis heure de la première ligne desc ;
-    lignes par heure croissante."""
+    """Écritures avec leurs lignes, de la plus récente à la plus ancienne (date puis id)."""
     sql = """
-        SELECT je.id, je.date, je.transaction_type, je.external_ref, MIN(jl.created_at) AS first_time
-        FROM journal_entries je JOIN journal_lines jl ON jl.entry_id = je.id
-        GROUP BY je.id ORDER BY je.date DESC, first_time DESC, je.id DESC
+        SELECT id, date, transaction_type, external_ref
+        FROM journal_entries ORDER BY date DESC, id DESC
     """
     if limit:
         sql += f" LIMIT {int(limit)}"
@@ -66,9 +64,9 @@ def get_entries(limit: int | None = None) -> list[dict]:
         ids = ",".join("?" * len(entries))
         lines = conn.execute(
             f"""
-            SELECT jl.*, i.name AS instrument_name, i.type AS instrument_type
+            SELECT jl.*, i.name AS instrument_name, i.des AS instrument_des, i.type AS instrument_type
             FROM journal_lines jl LEFT JOIN instruments i ON i.conid = jl.instrument_conid
-            WHERE jl.entry_id IN ({ids}) ORDER BY jl.created_at, jl.id
+            WHERE jl.entry_id IN ({ids}) ORDER BY jl.id
             """,
             list(entries),
         )

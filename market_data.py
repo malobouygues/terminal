@@ -116,7 +116,7 @@ async def sync_history(ib: IB) -> None:
             continue
         if not s["symbol"]:
             _set_symbol(s["conid"], contract)
-        what = "MIDPOINT" if s["type"] == "DERIVATIVES" else "TRADES"
+        what = "MIDPOINT" if s["type"] == "DERIVATIVE" else "TRADES"
         closes = await _daily_closes(ib, contract, start, end, what)
         _store(market_conn(), "INSERT OR REPLACE INTO close_prices (date, conid, close) VALUES (?,?,?)",
                [(d, s["conid"], c) for d, c in closes])
@@ -240,7 +240,7 @@ async def contract_details(ib: IB, conid: str) -> dict | None:
         "conid": conid,
         "name": details[0].longName or c.symbol,
         "symbol": c.localSymbol if deriv else c.symbol,
-        "type": "DERIVATIVES" if deriv else "DELTA_ONE",
+        "type": "DERIVATIVE" if deriv else "SECURITY",
         "currency": c.currency,
         "multiplier": float(c.multiplier or 1.0),
         "expiry": f"{expiry[:4]}-{expiry[4:6]}-{expiry[6:8]}" if len(expiry) >= 8 else None,
